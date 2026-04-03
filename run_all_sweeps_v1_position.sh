@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# v2 sweep: velocity-form controller (actuator += K·x)
-# Baseline + entropy control + min-P only + QEWS (replace/hybrid)
-# All runs: 200 problems, offset=3000, max_tokens=4096
+# Full 2B sweep: baseline, H=0.1 control, min-P only, QEWS
+# Low target entropy to reduce uncertainty
 
 set -e
 
@@ -10,101 +9,83 @@ source "${SCRIPT_DIR}/../.venv/bin/activate"
 
 D="testbench/data/hendrycks_math.parquet"
 M="2b"
-N=100
-O=0
-T=2048
-R="testbench/results/v2_velocity"
-
-mkdir -p "$R"
+N=200
+O=3000
+T=4096
+R="testbench/results"
 
 RUN="python3 testbench/run.py -m $M -d $D --limit $N --offset $O --max-tokens $T"
 
 echo "==========================================================="
-echo "  v2 Velocity-Form Sweep"
+echo "  Full 2B Sweep"
 echo "==========================================================="
 
-# ── Baseline (no controller) ────────────────────────────────────
+# ── Baseline (shared across all sweeps) ──────────────────────────
 echo ""
 echo "== [BASELINE] No controller =="
-$RUN -o "${R}/baseline.jsonl"
+$RUN -o "${R}/sweep_2b_baseline.jsonl"
 
-# ── Sweep 1: H_target=0.1, full M+P+F control ──────────────────
+# ── Sweep 1: H_target=0.1 (M+P+F control) ───────────────────────
 echo ""
-echo "== [SWEEP 1] H_target=0.1, M+P+F velocity =="
+echo "== [SWEEP 1] H_target=0.1 =="
 
 echo "-- PID (K_dd=0) --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.0 \
     --K-P 0.005 0.02 0.03 0.0 \
     --K-F 0.002 0.01 0.015 0.0 \
-    -o "${R}/h01_pid.jsonl"
+    -o "${R}/sweep_2b_h01_pid.jsonl"
 
 echo "-- 4th-order (default) --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.08 \
     --K-P 0.005 0.02 0.03 0.05 \
     --K-F 0.002 0.01 0.015 0.025 \
-    -o "${R}/h01_4th.jsonl"
+    -o "${R}/sweep_2b_h01_4th_order.jsonl"
 
 echo "-- 4th-order (2x accel) --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.16 \
     --K-P 0.005 0.02 0.03 0.10 \
     --K-F 0.002 0.01 0.015 0.05 \
-    -o "${R}/h01_4th_x2.jsonl"
+    -o "${R}/sweep_2b_h01_4th_order_x2accel.jsonl"
 
-# ── Sweep 2: H_target=0.1, min-P only ──────────────────────────
+# ── Sweep 2: H_target=0.1 min-P only ────────────────────────────
 echo ""
 echo "== [SWEEP 2] H_target=0.1, min-P only =="
 
-echo "-- PID min-P only --"
+echo "-- PID min-p only --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.0 \
     --K-P 0.0 0.0 0.0 0.0 \
     --K-F 0.0 0.0 0.0 0.0 \
-    -o "${R}/minp_pid.jsonl"
+    -o "${R}/sweep_2b_minp_pid.jsonl"
 
-echo "-- 4th-order min-P only --"
+echo "-- 4th-order min-p only --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.08 \
     --K-P 0.0 0.0 0.0 0.0 \
     --K-F 0.0 0.0 0.0 0.0 \
-    -o "${R}/minp_4th.jsonl"
+    -o "${R}/sweep_2b_minp_4th_order.jsonl"
 
-echo "-- 4th-order min-P only (2x accel) --"
+echo "-- 4th-order min-p only (2x accel) --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.16 \
     --K-P 0.0 0.0 0.0 0.0 \
     --K-F 0.0 0.0 0.0 0.0 \
-    -o "${R}/minp_4th_x2.jsonl"
+    -o "${R}/sweep_2b_minp_4th_order_x2accel.jsonl"
 
-# ── Sweep 3: QEWS ──────────────────────────────────────────────
+# ── Sweep 3: QEWS ────────────────────────────────────────────────
 echo ""
 echo "== [SWEEP 3] QEWS =="
 
-echo "-- QEWS replace (PID) --"
-$RUN \
-    --qews-mode replace --qews-target 0.0 \
-    --qews-K-M 0.005 0.03 0.04 0.0 \
-    --qews-K-P 0.005 0.02 0.03 0.0 \
-    --qews-K-F 0.002 0.01 0.015 0.0 \
-    -o "${R}/qews_replace_pid.jsonl"
-
-echo "-- QEWS replace (4th-order) --"
+echo "-- QEWS replace --"
 $RUN \
     --qews-mode replace --qews-target 0.0 \
     --qews-K-M 0.005 0.03 0.04 0.08 \
     --qews-K-P 0.005 0.02 0.03 0.05 \
     --qews-K-F 0.002 0.01 0.015 0.025 \
-    -o "${R}/qews_replace_4th.jsonl"
-
-echo "-- QEWS replace (4th-order 2x) --"
-$RUN \
-    --qews-mode replace --qews-target 0.0 \
-    --qews-K-M 0.005 0.03 0.04 0.16 \
-    --qews-K-P 0.005 0.02 0.03 0.10 \
-    --qews-K-F 0.002 0.01 0.015 0.05 \
-    -o "${R}/qews_replace_4th_x2.jsonl"
+    -o "${R}/sweep_2b_qews_replace.jsonl"
 
 echo "-- QEWS hybrid (w_H=1, w_Q=1) --"
 $RUN --control --H-target 0.1 \
@@ -116,9 +97,9 @@ $RUN --control --H-target 0.1 \
     --qews-K-P 0.005 0.02 0.03 0.05 \
     --qews-K-F 0.002 0.01 0.015 0.025 \
     --w-H 1.0 --w-Q 1.0 \
-    -o "${R}/qews_hybrid_1_1.jsonl"
+    -o "${R}/sweep_2b_qews_hybrid.jsonl"
 
-echo "-- QEWS hybrid (w_H=1, w_Q=2) --"
+echo "-- QEWS hybrid x2 (w_H=1, w_Q=2) --"
 $RUN --control --H-target 0.1 \
     --K-M 0.005 0.03 0.04 0.08 \
     --K-P 0.005 0.02 0.03 0.05 \
@@ -128,9 +109,9 @@ $RUN --control --H-target 0.1 \
     --qews-K-P 0.005 0.02 0.03 0.05 \
     --qews-K-F 0.002 0.01 0.015 0.025 \
     --w-H 1.0 --w-Q 2.0 \
-    -o "${R}/qews_hybrid_1_2.jsonl"
+    -o "${R}/sweep_2b_qews_hybrid_x2.jsonl"
 
-# ── Results ─────────────────────────────────────────────────────
+# ── Results ──────────────────────────────────────────────────────
 echo ""
 echo "==========================================================="
 echo "  ALL DONE — running analysis"

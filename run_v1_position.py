@@ -99,10 +99,10 @@ class ZScore:
         self._sum_sq = 0.0
 
 
-# ── 4th-order entropy controller (velocity form) ────────────────────────────
+# ── 4th-order entropy controller ─────────────────────────────────────────────
 
 class EntropyController:
-    """4th-order feedback controller (velocity form) — actuators integrate K·x.
+    """4th-order feedback controller that drives entropy toward a target setpoint.
 
     State vector x = [integral, error, d_error, d2_error]
         x[0] = ∫ e(t) dt        (trapezoidal integral of error, with anti-windup)
@@ -110,10 +110,10 @@ class EntropyController:
         x[2] = e(k) - e(k-1)   (first difference / velocity)
         x[3] = Δe(k) - Δe(k-1) (second difference / acceleration)
 
-    Velocity-form actuation: actuator += K · x  (clipped to stay non-negative)
-        M += -(K_M · x)   positive error (too confident) → lower min-p (widen)
-        P +=  (K_P · x)   positive error → raise top-p (widen)
-        F += -(K_F · x)   positive error → lower freq penalty (allow repeats)
+    Actuators: min-p (M), top-p (P), frequency_penalty (F)
+        ΔM = -(K_M · x)   positive error (too confident) → lower min-p (widen)
+        ΔP =  K_P · x      positive error → raise top-p (widen)
+        ΔF = -(K_F · x)   positive error → lower freq penalty (allow repeats)
 
     Error convention: e = H_target - H
         e > 0 → entropy is below target (too confident) → widen distribution
@@ -145,11 +145,6 @@ class EntropyController:
         self._prev_error = 0.0
         self._prev_d_error = 0.0
 
-        # Actuator state (integrates over time)
-        self._M = M_base
-        self._P = P_base
-        self._F = F_base
-
     def step(self, H: float) -> tuple[float, float, float, float, float, float]:
         """Given current entropy H, return (M, P, F, dM, dP, dF)."""
         e_raw = self.H_target - H
@@ -172,28 +167,26 @@ class EntropyController:
         self._x[2] = d_e
         self._x[3] = d2_e
 
-        # Velocity-form actuation: actuator += K·x, then clip
+        # Actuation
+        # Positive error (too confident) → lower M (widen), raise P (widen), lower F (less penalty)
         dM = -float(self.K_M @ self._x)
         dP = float(self.K_P @ self._x)
         dF = -float(self.K_F @ self._x)
 
-        self._M = max(0.0, self._M + dM)
-        self._P = max(0.0, min(1.0, self._P + dP))
-        self._F = max(0.0, self._F + dF)
+        M = max(0.0, self.M_base + dM)
+        P = max(0.0, min(1.0, self.P_base + dP))
+        F = max(0.0, self.F_base + dF)
 
         # Save for next step
         self._prev_error = e
         self._prev_d_error = d_e
 
-        return self._M, self._P, self._F, dM, dP, dF
+        return M, P, F, dM, dP, dF
 
     def reset(self):
         self._x[:] = 0.0
         self._prev_error = 0.0
         self._prev_d_error = 0.0
-        self._M = self.M_base
-        self._P = self.P_base
-        self._F = self.F_base
 
 
 # ── QEWS (Quantum Early Warning Signal) ─────────────────────────────────────
@@ -478,6 +471,7 @@ def generate(
     min_p: float = 0.05,
     top_k: int = 20,
     top_p: float = 0.95,
+    repeat_penalty: float = 1.05,
     thinking_budget: int = 0,
     live: bool = True,
 ) -> tuple[str, list[TokenLog]]:
@@ -545,14 +539,12 @@ def generate(
         elif qews_mode == "hybrid" and controller is not None and qews_controller is not None:
             M_h, P_h, F_h, dM_h, dP_h, dF_h = controller.step(H)
             M_q, P_q, F_q, dM_q, dP_q, dF_q = qews_controller.step(qews_sig)
-            # Weighted blend of both controllers' integrated actuator states
-            w_total = w_H + w_Q
-            M = max(0.0, (w_H * M_h + w_Q * M_q) / w_total)
-            P = max(0.0, min(1.0, (w_H * P_h + w_Q * P_q) / w_total))
-            F = max(0.0, (w_H * F_h + w_Q * F_q) / w_total)
             dM = w_H * dM_h + w_Q * dM_q
             dP = w_H * dP_h + w_Q * dP_q
             dF = w_H * dF_h + w_Q * dF_q
+            M = max(0.0, controller.M_base + dM)
+            P = max(0.0, min(1.0, controller.P_base + dP))
+            F = max(0.0, controller.F_base + dF)
             err = controller._x[1]
             integral = controller._x[0]
         elif controller is not None:
@@ -866,6 +858,7 @@ def main():
         min_p=args.min_p,
         top_k=args.top_k,
         top_p=args.top_p,
+        repeat_penalty=args.repeat_penalty,
         thinking_budget=args.thinking,
     )
 
