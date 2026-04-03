@@ -122,4 +122,4 @@ MIT
 
 ## Funding
 
-This project is self-funded. If you'd like to support the research, the [Manifund project](https://manifund.org) covers a GPU upgrade that would significantly accelerate experimentation.
+This project is self-funded. If you'd like to support the research, the [Manifund project]([https://manifund.org](https://manifund.org/projects/cybernetic-entropy-controller]) covers a GPU upgrade that would significantly accelerate experimentation.
