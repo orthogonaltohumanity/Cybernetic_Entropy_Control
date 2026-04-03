@@ -113,7 +113,7 @@ $$\boldsymbol{\rho}_k = \frac{1}{W} \sum_{i=k-W+1}^{k} \boldsymbol{\psi}_i \bold
 
 The von Neumann entropy of rho tracks structural shifts in the *distribution of distributions* over time, rather than instantaneous entropy at a single token. The QEWS signal is the deviation from a running exponential moving average of this entropy.
 
-## KV Cache Spectral Monitor
+## KV Cache Spectral Monitor (WIP)
 
 `kv_monitor.py` instruments the KV cache during generation via SVD, computing per-layer per-head spectral health metrics:
 
