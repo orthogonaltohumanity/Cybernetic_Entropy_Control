@@ -199,7 +199,7 @@ python run.py -m 2b -d data/hendrycks_math.parquet \
     -o results/qews_hybrid.jsonl
 
 # Run full sweep
-bash run_all_sweeps.sh
+bash run_full_math_ab.sh
 
 # Analyze results
 python analyze.py results/*.jsonl --sort accuracy --md
