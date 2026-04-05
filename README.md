@@ -132,7 +132,7 @@ All results: Qwen 3.5 2B (Q4_K_M), 200 problems from MATH, 4096 token budget, ll
 ### Key findings
 
 - **Velocity form is a major improvement.** Switching from position-form to velocity-form actuation raised the best result from +4.5pp to +8.0pp on small-scale experiments. The integrating actuator maintains persistent corrections that compound over the generation trajectory.
-- **The acceleration term matters.** The 4th-order controller outperforms PID by 1.5–4.5 points depending on configuration. The jerk signal catches entropy dynamics that lower-order controllers miss.
+- **The acceleration term matters.** The 4th-order controller outperforms PID by 1.5–4.5 points depending on configuration. The signal catches entropy dynamics that lower-order controllers miss.
 - **QEWS hybrid is the best configuration.** Shannon entropy and quantum density operator signals at equal weighting (w_H=1, w_Q=1) achieves 83% — the single best result across all small-scale experiments.
 - **The spinning failure mode is the primary target.** In the full sweep, cap hits account for nearly all wrong answers. The controller's gain comes almost entirely from reducing cap hits, not from correcting confident wrong answers. Confident wrong answers (short responses, low entropy) are outside the controller's observable domain.
 - **Entropy predicts outcome.** Mean entropy cleanly separates correct from wrong answers and uncapped from capped problems across both conditions, validating entropy as a control signal.
